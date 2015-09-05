@@ -1,0 +1,30 @@
+{{$services:=services}}
+{{range $services}}
+{{if service .Name}}
+upstream {{.Name}}_backends {
+    least_conn;
+    {{range service .Name}}server {{.Address}}:{{.Port}};
+{{end}}}
+{{end}}{{end}}
+server {
+    error_log    /var/log/nginx/error.log debug;
+    rewrite_log on;
+    listen 80;
+    {{range $services}}
+    {{if service .Name}}
+    location /{{.Name}} {
+        rewrite ^/{{.Name}}(/.*)$ $1 last;
+
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+
+        proxy_max_temp_file_size 0;     
+        proxy_buffering off;
+        proxy_connect_timeout 30;
+        proxy_send_timeout 30;
+        proxy_read_timeout 30;
+        proxy_pass http://{{.Name}}_backends;
+    }{{end}}{{end}}
+    server_name {{env "SERVER_NAME"}}.{{env "DOMAIN_NAME"}};
+}
